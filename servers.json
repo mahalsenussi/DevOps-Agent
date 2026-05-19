@@ -1,0 +1,11 @@
+{
+  "servers": [
+    {
+      "name": "home",
+      "host": "10.147.18.5",
+      "user": "mahmoud",
+      "key_path": null,
+      "password": null
+    }
+  ]
+}

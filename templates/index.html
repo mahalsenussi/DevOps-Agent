@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevOps Agent Interface</title>
+    <link href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #1a1a2e; color: #eee; 
+            height: 100vh; overflow: hidden;
+        }
+        .container { display: flex; height: 100vh; }
+        
+        /* Sidebar */
+        .sidebar { 
+            width: 250px; background: #16213e; padding: 20px;
+            border-right: 1px solid #0f3460;
+        }
+        .logo { 
+            font-size: 24px; font-weight: bold; color: #e94560;
+            margin-bottom: 30px; padding-bottom: 10px; border-bottom: 2px solid #e94560;
+        }
+        .nav-item { 
+            padding: 12px 15px; margin: 5px 0; border-radius: 8px;
+            cursor: pointer; transition: 0.3s; color: #aaa;
+        }
+        .nav-item:hover, .nav-item.active { 
+            background: #0f3460; color: #fff;
+        }
+        .nav-item.active { border-left: 3px solid #e94560; }
+        
+        /* Main Content */
+        .main { flex: 1; display: flex; flex-direction: column; }
+        .header { 
+            background: #16213e; padding: 15px 20px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .header h2 { color: #fff; font-size: 18px; }
+        .content { flex: 1; padding: 20px; overflow-y: auto; }
+        
+        /* Terminal */
+        #terminal { 
+            height: 400px; background: #000; padding: 10px;
+            border-radius: 8px; font-family: monospace;
+        }
+        
+        /* Agent Input */
+        .agent-input {
+            display: flex; gap: 10px; margin-top: 20px;
+        }
+        .agent-input input {
+            flex: 1; padding: 15px; border-radius: 8px; border: none;
+            background: #16213e; color: #fff; font-size: 16px;
+        }
+        .agent-input button {
+            padding: 15px 30px; border-radius: 8px; border: none;
+            background: #e94560; color: #fff; cursor: pointer; font-size: 16px;
+        }
+        .agent-input button:hover { background: #d63050; }
+        
+        /* Checkbox */
+        .checkbox-wrapper { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+        .checkbox-wrapper input { width: 20px; height: 20px; }
+        
+        /* Server List */
+        .server-list { margin-top: 20px; }
+        .server-item {
+            padding: 15px; background: #0f3460; border-radius: 8px;
+            margin: 10px 0; display: flex; justify-content: space-between;
+            align-items: center;
+        }
+        .server-item button {
+            padding: 8px 15px; border-radius: 5px; border: none;
+            cursor: pointer; font-size: 12px;
+        }
+        .connect-btn { background: #e94560; color: #fff; }
+        .delete-btn { background: #555; color: #fff; }
+        
+        /* Add Server Form */
+        .add-server {
+            background: #0f3460; padding: 20px; border-radius: 8px;
+            margin-top: 20px;
+        }
+        .add-server input {
+            width: 100%; padding: 10px; margin: 5px 0;
+            border-radius: 5px; border: none; background: #16213e; color: #fff;
+        }
+        .add-server button {
+            width: 100%; padding: 10px; border-radius: 5px; border: none;
+            background: #e94560; color: #fff; cursor: pointer; margin-top: 10px;
+        }
+        
+        /* Results */
+        .result-box {
+            background: #0f3460; padding: 20px; border-radius: 8px;
+            margin-top: 20px; max-height: 400px; overflow-y: auto;
+        }
+        .result-box pre { white-space: pre-wrap; font-family: monospace; }
+        
+        /* Memory */
+        .memory-item {
+            background: #0f3460; padding: 15px; border-radius: 8px;
+            margin: 10px 0; font-size: 14px;
+        }
+        .memory-item .meta { color: #888; font-size: 12px; margin-top: 5px; }
+        
+        /* Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+        .tab {
+            padding: 10px 20px; background: #16213e; border-radius: 8px;
+            cursor: pointer; border: none; color: #aaa;
+        }
+        .tab.active { background: #e94560; color: #fff; }
+        
+        .panel { display: none; }
+        .panel.active { display: block; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="logo">🤖 DevOps Agent</div>
+            <div class="nav-item active" onclick="showPanel('terminal')">Terminal</div>
+            <div class="nav-item" onclick="showPanel('agent')">Agent Tasks</div>
+            <div class="nav-item" onclick="showPanel('ssh')">SSH Servers</div>
+            <div class="nav-item" onclick="showPanel('memory')">Memory</div>
+        </div>
+        
+        <!-- Main -->
+        <div class="main">
+            <div class="header">
+                <h2 id="panel-title">Terminal</h2>
+            </div>
+            <div class="content">
+                
+                <!-- Terminal Panel -->
+                <div id="panel-terminal" class="panel active">
+                    <div id="terminal"></div>
+                    <div class="agent-input">
+                        <input type="text" id="shell-input" placeholder="Type command, !shell, ssh:server:cmd, or AI task..." 
+                               onkeypress="if(event.key==='Enter')runShell()">
+                        <button onclick="runShell()">Run</button>
+                    </div>
+                    <div style="margin-top:10px; color:#666; font-size:12px;">
+                        💡 Tips: <b>!cmd</b> = shell, <b>ssh:server:cmd</b> = SSH, <b>natural text</b> = AI agent
+                    </div>
+                </div>
+                
+                <!-- Agent Panel -->
+                <div id="panel-agent" class="panel">
+                    <div class="agent-input">
+                        <input type="text" id="agent-task" placeholder="Enter task for agent..." 
+                               onkeypress="if(event.key==='Enter')runAgent()">
+                        <button onclick="runAgent()">Execute</button>
+                    </div>
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="autonomous-mode">
+                        <label for="autonomous-mode">Autonomous Mode (Plan → Execute → Verify)</label>
+                    </div>
+                    <div class="result-box" id="agent-result" style="display:none;">
+                        <h3>Result:</h3>
+                        <pre id="agent-result-content"></pre>
+                    </div>
+                </div>
+                
+                <!-- SSH Panel -->
+                <div id="panel-ssh" class="panel">
+                    <div class="agent-input">
+                        <select id="ssh-server-select" style="padding:15px; border-radius:8px; background:#16213e; color:#fff; border:none;">
+                            <option value="">Select server...</option>
+                        </select>
+                        <button class="connect-btn" onclick="connectSSH()">Connect</button>
+                        <button class="delete-btn" onclick="disconnectSSH()">Disconnect</button>
+                    </div>
+                    <div class="checkbox-wrapper" style="margin-top:10px;">
+                        <input type="checkbox" id="ssh-shell-mode">
+                        <label for="ssh-shell-mode">Shell Mode (Interactive Terminal)</label>
+                    </div>
+                    
+                    <!-- Enhanced Command Interface -->
+                    <div class="command-interface" style="margin:20px 0;">
+                        <div class="direct-command" style="margin-bottom:15px;">
+                            <label style="color:#fff; margin-bottom:8px; display:block;">🔧 Direct Command (Execute Now)</label>
+                            <div class="agent-input">
+                                <input type="text" id="ssh-direct-input" placeholder="Enter command to execute directly..." 
+                                       onkeypress="if(event.key==='Enter')runDirectCommand()" style="flex:1;">
+                                <button onclick="runDirectCommand()">Execute</button>
+                            </div>
+                        </div>
+                        
+                        <div class="ai-command" style="margin-bottom:15px;">
+                            <label style="color:#fff; margin-bottom:8px; display:block;">🤖 AI Assistant (Generate Next Commands)</label>
+                            <div class="agent-input">
+                                <input type="text" id="ssh-ai-input" placeholder="Describe what you want to do next..." 
+                                       onkeypress="if(event.key==='Enter')generateAICommands()" style="flex:1;">
+                                <button onclick="generateAICommands()">Generate</button>
+                            </div>
+                            <div id="ai-suggestions" style="margin-top:10px; display:none;">
+                                <div style="color:#aaa; font-size:12px; margin-bottom:5px;">AI Suggested Commands:</div>
+                                <div id="ai-command-list"></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="ssh-terminal" style="height:350px; background:#000; border-radius:8px; padding:10px; margin:20px 0;"></div>
+                    
+                    <h3 style="margin-top:30px;">Manage Servers</h3>
+                    <div class="server-list" id="server-list"></div>
+                    
+                    <div class="add-server">
+                        <h4>Add Server</h4>
+                        <input type="text" id="new-server-name" placeholder="Name (e.g., prod)">
+                        <input type="text" id="new-server-host" placeholder="Host (e.g., 192.168.1.10)">
+                        <input type="text" id="new-server-user" placeholder="User (default: root)">
+                        <input type="text" id="new-server-key" placeholder="SSH Key Path (optional)">
+                        <button onclick="addServer()">Add Server</button>
+                    </div>
+                </div>
+                
+                <!-- Memory Panel -->
+                <div id="panel-memory" class="panel">
+                    <div class="agent-input">
+                        <input type="text" id="memory-search" placeholder="Search memory..." 
+                               onkeypress="if(event.key==='Enter')searchMemory()">
+                        <button onclick="searchMemory()">Search</button>
+                    </div>
+                    <div id="memory-results"></div>
+                </div>
+                
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        // Initialize xterm
+        const term = new Terminal({
+            theme: { background: '#000', foreground: '#fff' },
+            fontSize: 14,
+            fontFamily: 'monospace'
+        });
+        term.open(document.getElementById('terminal'));
+        
+        // Socket.io
+        const socket = io();
+        
+        // Shell terminal - Now using smart commands
+        function runShell() {
+            const input = document.getElementById('shell-input');
+            const command = input.value;
+            if (!command) return;
+            input.value = '';
+            // Use smart_command for both manual and AI commands
+            socket.emit('smart_command', {command: command});
+        }
+        
+        socket.on('shell_output', (data) => {
+            if (data.type === 'command') {
+                term.write('\r\n' + data.data + '\r\n');
+            } else if (data.type === 'output') {
+                term.write(data.data);
+            } else if (data.type === 'error') {
+                term.write('\x1b[31m' + data.data + '\x1b[0m\r\n');
+            } else if (data.type === 'done') {
+                term.write('\x1b[32m' + data.data + '\x1b[0m\r\n');
+                term.write('$ ');
+            }
+        });
+        
+        // Smart command output handler (Manual + AI)
+        socket.on('smart_output', (data) => {
+            const mode = data.mode || 'shell';
+            const type = data.type || 'output';
+            const content = data.data || '';
+            
+            if (mode === 'ai') {
+                // AI mode - show with colors
+                if (type === 'ai_start') {
+                    term.write('\r\n\x1b[36m' + content + '\x1b[0m\r\n');
+                } else if (type === 'ai_progress') {
+                    term.write('\x1b[33m' + content + '\x1b[0m\r\n');
+                } else if (type === 'ai_command') {
+                    const reason = data.reason || '';
+                    term.write('\x1b[35m' + content + '\x1b[0m');
+                    if (reason) {
+                        term.write(' \x1b[90m(' + reason + ')\x1b[0m');
+                    }
+                    term.write('\r\n');
+                } else if (type === 'ai_result') {
+                    term.write('\x1b[34m' + content + '\x1b[0m\r\n');
+                } else if (type === 'ai_done' || type === 'ai_success') {
+                    term.write('\x1b[32m' + content + '\x1b[0m\r\n');
+                } else if (type === 'ai_error') {
+                    term.write('\x1b[31m' + content + '\x1b[0m\r\n');
+                }
+            } else {
+                // Shell/SSH mode
+                if (type === 'command') {
+                    term.write('\r\n' + content + '\r\n');
+                } else if (type === 'output') {
+                    term.write(content);
+                } else if (type === 'error') {
+                    term.write('\x1b[31m' + content + '\x1b[0m\r\n');
+                } else if (type === 'done') {
+                    term.write('\x1b[32m' + content + '\x1b[0m\r\n');
+                }
+            }
+            
+            // Always show prompt after done
+            if (type === 'done' || type === 'ai_done' || type === 'ai_success' || type === 'ai_error') {
+                term.write('$ ');
+            }
+        });
+        
+        // Agent
+        function runAgent() {
+            const task = document.getElementById('agent-task').value;
+            const autonomous = document.getElementById('autonomous-mode').checked;
+            if (!task) return;
+            
+            document.getElementById('agent-result').style.display = 'block';
+            document.getElementById('agent-result-content').textContent = 'Running...';
+            
+            fetch('/api/agent/run', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({task: task, autonomous: autonomous})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.result) {
+                    const result = typeof data.result === 'string' ? data.result : JSON.stringify(data.result, null, 2);
+                    document.getElementById('agent-result-content').textContent = result;
+                } else {
+                    document.getElementById('agent-result-content').textContent = 'Error: ' + (data.error || 'Unknown error');
+                }
+            });
+        }
+        
+        // SSH
+        const sshTerm = new Terminal({
+            theme: { background: '#000', foreground: '#fff' },
+            fontSize: 14,
+            fontFamily: 'monospace'
+        });
+        sshTerm.open(document.getElementById('ssh-terminal'));
+        
+        let sshShellMode = false;
+        let currentSSHServer = null;
+        
+        function connectSSH() {
+            const server = document.getElementById('ssh-server-select').value;
+            if (!server) return;
+            currentSSHServer = server;
+            
+            // Check if shell mode is enabled
+            const shellMode = document.getElementById('ssh-shell-mode').checked;
+            
+            if (shellMode) {
+                sshShellMode = true;
+                socket.emit('ssh_connect', {server: server, shell_mode: true});
+            } else {
+                sshShellMode = false;
+                socket.emit('ssh_connect', {server: server});
+            }
+        }
+        
+        function disconnectSSH() {
+            const server = document.getElementById('ssh-server-select').value;
+            if (!server) return;
+            
+            if (sshShellMode && server === currentSSHServer) {
+                socket.emit('ssh_shell_exit', {server: server});
+                sshShellMode = false;
+                currentSSHServer = null;
+            }
+            
+            socket.emit('ssh_disconnect', {server: server});
+        }
+        
+        function runSSH() {
+            if (sshShellMode) {
+                // In shell mode, input is handled directly by terminal
+                return;
+            }
+            
+            const server = document.getElementById('ssh-server-select').value;
+            const command = document.getElementById('ssh-direct-input').value;
+            if (!server || !command) return;
+            document.getElementById('ssh-direct-input').value = '';
+            socket.emit('ssh_command', {server: server, command: command});
+        }
+        
+        function runDirectCommand() {
+            const server = document.getElementById('ssh-server-select').value;
+            const command = document.getElementById('ssh-direct-input').value;
+            if (!server || !command) return;
+            document.getElementById('ssh-direct-input').value = '';
+            socket.emit('ssh_command', {server: server, command: command});
+        }
+        
+        function generateAICommands() {
+            const server = document.getElementById('ssh-server-select').value;
+            const aiRequest = document.getElementById('ssh-ai-input').value;
+            if (!server || !aiRequest) return;
+            
+            // Show loading state
+            const suggestionsDiv = document.getElementById('ai-suggestions');
+            const commandList = document.getElementById('ai-command-list');
+            suggestionsDiv.style.display = 'block';
+            commandList.innerHTML = '<div style="color:#e94560;">🤖 Thinking...</div>';
+            
+            // Send AI request
+            socket.emit('ssh_ai_command', {
+                server: server,
+                request: aiRequest,
+                context: 'ssh_troubleshooting'
+            });
+            
+            document.getElementById('ssh-ai-input').value = '';
+        }
+        
+        function executeAICommand(command) {
+            const server = document.getElementById('ssh-server-select').value;
+            if (!server || !command) return;
+            
+            // Execute the AI-suggested command
+            socket.emit('ssh_command', {server: server, command: command});
+            
+            // Clear suggestions after execution
+            document.getElementById('ai-suggestions').style.display = 'none';
+        }
+        
+        // Handle terminal input for shell mode
+        sshTerm.onData((data) => {
+            if (sshShellMode && currentSSHServer) {
+                socket.emit('ssh_shell_input', {server: currentSSHServer, input: data});
+            }
+        });
+        
+        socket.on('ssh_ai_response', (data) => {
+            const suggestionsDiv = document.getElementById('ai-suggestions');
+            const commandList = document.getElementById('ai-command-list');
+            
+            if (data.commands && data.commands.length > 0) {
+                let html = '';
+                data.commands.forEach((cmd, index) => {
+                    html += `
+                        <div style="background:#0f3460; padding:10px; margin:5px 0; border-radius:5px; cursor:pointer;" 
+                             onclick="executeAICommand('${cmd.command}')">
+                            <div style="color:#e94560; font-size:12px;">Command ${index + 1}:</div>
+                            <div style="color:#fff; font-family:monospace;">${cmd.command}</div>
+                            <div style="color:#aaa; font-size:11px; margin-top:5px;">${cmd.explanation}</div>
+                        </div>
+                    `;
+                });
+                commandList.innerHTML = html;
+            } else {
+                commandList.innerHTML = '<div style="color:#ff6b6b;">❌ No commands generated. Try being more specific.</div>';
+            }
+        });
+        
+        socket.on('ssh_output', (data) => {
+            if (data.type === 'command') {
+                sshTerm.write('\r\n' + data.data + '\r\n');
+            } else if (data.type === 'output') {
+                sshTerm.write(data.data);
+            } else if (data.type === 'shell_output') {
+                sshTerm.write(data.data);
+            } else if (data.type === 'shell_error') {
+                sshTerm.write('\x1b[31m' + data.data + '\x1b[0m');
+            } else if (data.type === 'shell_started') {
+                sshTerm.write('\x1b[32m' + data.data + '\x1b[0m\r\n');
+                sshTerm.write('Entering interactive shell mode. Type "exit" to leave shell.\r\n');
+            } else if (data.type === 'shell_done') {
+                sshTerm.write('\r\n\x1b[32m' + data.data + '\x1b[0m\r\n');
+                sshShellMode = false;
+                currentSSHServer = null;
+                sshTerm.write('$ ');
+            } else if (data.type === 'error') {
+                sshTerm.write('\x1b[31m' + data.data + '\x1b[0m\r\n');
+            } else if (data.type === 'done') {
+                sshTerm.write('\x1b[32m' + data.data + '\x1b[0m\r\n');
+                if (!sshShellMode) {
+                    sshTerm.write('$ ');
+                }
+            } else if (data.type === 'info') {
+                sshTerm.write('\x1b[36m' + data.data + '\x1b[0m\r\n');
+            } else if (data.type === 'password_required') {
+                sshTerm.write('\x1b[33m' + data.data + '\x1b[0m\r\n');
+                // Show password prompt modal
+                const password = prompt('Enter password for ' + data.data.split(' for ')[1]);
+                if (password) {
+                    const server = document.getElementById('ssh-server-select').value;
+                    socket.emit('ssh_connect', {server: server, password: password});
+                } else {
+                    sshTerm.write('Connection cancelled.\r\n$ ');
+                }
+            }
+        });
+        
+        // Server management
+        function loadServers() {
+            fetch('/api/servers').then(r => r.json()).then(data => {
+                const list = document.getElementById('server-list');
+                list.innerHTML = '';
+                const select = document.getElementById('ssh-server-select');
+                select.innerHTML = '<option value="">Select server...</option>';
+                
+                data.servers.forEach(s => {
+                    list.innerHTML += `
+                        <div class="server-item">
+                            <div>
+                                <strong>${s.name}</strong><br>
+                                <small>${s.user}@${s.host}</small>
+                            </div>
+                            <button class="delete-btn" onclick="deleteServer('${s.name}')">Delete</button>
+                        </div>
+                    `;
+                    select.innerHTML += `<option value="${s.name}">${s.name} (${s.host})</option>`;
+                });
+            });
+        }
+        
+        function addServer() {
+            fetch('/api/servers', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    name: document.getElementById('new-server-name').value,
+                    host: document.getElementById('new-server-host').value,
+                    user: document.getElementById('new-server-user').value || 'root',
+                    key_path: document.getElementById('new-server-key').value || null
+                })
+            }).then(() => {
+                loadServers();
+                ['new-server-name', 'new-server-host', 'new-server-user', 'new-server-key'].forEach(id => 
+                    document.getElementById(id).value = '');
+            });
+        }
+        
+        function deleteServer(name) {
+            fetch('/api/servers/' + name, {method: 'DELETE'}).then(loadServers);
+        }
+        
+        // Memory
+        function searchMemory() {
+            const q = document.getElementById('memory-search').value;
+            fetch('/api/memory/search?q=' + encodeURIComponent(q))
+                .then(r => r.json())
+                .then(data => {
+                    const results = document.getElementById('memory-results');
+                    results.innerHTML = '';
+                    data.results.forEach(r => {
+                        results.innerHTML += `
+                            <div class="memory-item">
+                                <pre>${r.content}</pre>
+                                <div class="meta">${r.metadata?.timestamp || ''}</div>
+                            </div>
+                        `;
+                    });
+                });
+        }
+        
+        // Navigation
+        function showPanel(panel) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('panel-' + panel).classList.add('active');
+            document.querySelectorAll('.nav-item')[['terminal','agent','ssh','memory'].indexOf(panel)].classList.add('active');
+            document.getElementById('panel-title').textContent = panel.charAt(0).toUpperCase() + panel.slice(1);
+            
+            if (panel === 'ssh') loadServers();
+        }
+        
+        // Initial
+        term.write('$ ');
+        sshTerm.write('Select a server and connect...\r\n$ ');
+        loadServers();
+    </script>
+</body>
+</html>
