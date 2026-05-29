@@ -40,8 +40,8 @@ agent/
 
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd agent
+git clone https://github.com/mahalsenussi/DevOps-Agent.git
+cd DevOps-Agent
 
 # Create virtual environment
 python3 -m venv venv
